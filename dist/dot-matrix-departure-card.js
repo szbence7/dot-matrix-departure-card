@@ -3,7 +3,7 @@
  * https://github.com/szbence7/dot-matrix-departure-card
  * MIT License (c) Szorgalmatos Bence
  */
-const CARD_VERSION = "0.2.0";
+const CARD_VERSION = "0.3.0";
 
 // 5x7 dot-matrix font: 35 bits per glyph, row by row
 const GLYPHS = {"0": "01110100011000110001100011000101110", "1": "00100011000010000100001000010001110", "2": "01110100010001000100010001000011111", "3": "01110100010000100110000011000101110", "4": "00010001100101010010111110001000010", "5": "11111100001111000001000011000101110", "6": "00110010001000011110100011000101110", "7": "11111000010001000100010000100001000", "8": "01110100011000101110100011000101110", "9": "01110100011000101111000010001001100", "A": "01110100011000111111100011000110001", "B": "11110100011000111110100011000111110", "C": "01110100011000010000100001000101110", "D": "11110100011000110001100011000111110", "E": "11111100001000011110100001000011111", "F": "11111100001000011110100001000010000", "G": "01110100011000010111100011000101110", "H": "10001100011000111111100011000110001", "I": "01110001000010000100001000010001110", "J": "00111000100001000010000101001001100", "K": "10001100101010011000101001001010001", "L": "10000100001000010000100001000011111", "M": "10001110111010110001100011000110001", "N": "10001110011010110011100011000110001", "O": "01110100011000110001100011000101110", "P": "11110100011000111110100001000010000", "Q": "01110100011000110001101011001001101", "R": "11110100011000111110101001001010001", "S": "01111100001000001110000010000111110", "T": "11111001000010000100001000010000100", "U": "10001100011000110001100011000101110", "V": "10001100011000110001010100101000100", "W": "10001100011000110101101011101110001", "X": "10001010100010000100001000101010001", "Y": "10001010100010000100001000010000100", "Z": "11111000010001000100010001000011111", " ": "00000000000000000000000000000000000", ":": "00000001000010000000001000010000000", "'": "00100001000000000000000000000000000", "Á": "00100011101000110001111111000110001", "É": "00100111111000011110100001000011111", "Í": "00100011100010000100001000010001110", "Ó": "00100011101000110001100011000101110", "Ö": "01010011101000110001100011000101110", "Ő": "10001011101000110001100011000101110", "Ú": "00100100011000110001100011000101110", "Ü": "01010100011000110001100011000101110", "Ű": "01001100100000010001100011000101110", ",": "00000000000000000000001100001000100", ".": "00000000000000000000000000011000110", "-": "00000000000000011111000000000000000", "/": "00001000100001000100010000100010000", "!": "00100001000010000100001000000000100", "?": "01110100010000100010001000000000100", "(": "00010001000100001000010000010000010", ")": "01000001000001000010000100010001000", "+": "00000001000010011111001000010000000"};
@@ -70,7 +70,7 @@ class DotMatrixDepartureCard extends HTMLElement {
     return { entity: entity || "" };
   }
 
-  static getConfigForm() {
+  static formDefinition() {
     return {
       schema: [
         { name: "entity", required: true, selector: { entity: { domain: "sensor", filter: { integration: "budapest_departures" } } } },
@@ -112,15 +112,19 @@ class DotMatrixDepartureCard extends HTMLElement {
     };
   }
 
+  static getConfigElement() {
+    return document.createElement("dot-matrix-departure-card-editor");
+  }
+
   setConfig(config) {
-    if (!config || !config.entity) throw new Error("Add meg az entity-t (indulás szenzor)");
+    if (!config) throw new Error("Hiányzó konfiguráció");
     this._config = { ...DEFAULTS, ...config };
     this._build();
   }
 
   set hass(hass) {
     this._hass = hass;
-    const state = hass.states[this._config.entity];
+    const state = this._config.entity ? hass.states[this._config.entity] : undefined;
     if (state !== this._state) {
       this._state = state;
       this._updateData();
@@ -170,7 +174,10 @@ class DotMatrixDepartureCard extends HTMLElement {
     this._ctx = this._canvas.getContext("2d");
     this._offsets = [];
     if (this.isConnected && this._resizeObserver) this._resizeObserver.observe(this._board);
-    if (this._hass) this._updateData();
+    if (this._hass) {
+      this._state = c.entity ? this._hass.states[c.entity] : undefined;
+      this._updateData();
+    }
   }
 
   _updateData() {
@@ -278,6 +285,7 @@ class DotMatrixDepartureCard extends HTMLElement {
 
   _lines(now) {
     const c = this._config;
+    if (!c.entity) return [{ cells: [{ text: "VÁLASSZ MEGÁLLÓT", flex: true }] }];
     if (this._unavailable) return [{ cells: [{ text: "NINCS ADAT", flex: true }] }];
     const deps = this._departures
       .map((d) => ({ ...d, min: Math.max(0, Math.round(((d.departure || 0) * 1000 - now) / 60000)) }))
@@ -380,6 +388,164 @@ class DotMatrixDepartureCard extends HTMLElement {
 }
 
 customElements.define("dot-matrix-departure-card", DotMatrixDepartureCard);
+
+/* ---------- Visual editor with live stop search ---------- */
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+class DotMatrixDepartureCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._seq = 0;
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    if (this._form) this._form.data = this._config;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._build();
+    if (this._form) this._form.hass = hass;
+  }
+
+  async _build() {
+    this._built = true;
+    // make sure ha-form and the entity picker are loaded
+    if (!customElements.get("ha-form") && window.loadCardHelpers) {
+      try {
+        const helpers = await window.loadCardHelpers();
+        const card = await helpers.createCardElement({ type: "entities", entities: [] });
+        await card.constructor.getConfigElement();
+      } catch (e) { /* ignore */ }
+    }
+    this.shadowRoot.innerHTML = `
+      <style>
+        .search { margin-bottom: 20px; }
+        .label { font-weight: 500; margin: 0 0 6px; color: var(--primary-text-color); }
+        .hint { font-size: 12px; color: var(--secondary-text-color); margin: 4px 0 0; }
+        input { box-sizing: border-box; width: 100%; height: 48px; padding: 0 14px; font-size: 16px; border-radius: 10px;
+          border: 1px solid var(--divider-color, #ccc); background: var(--card-background-color, #fff); color: var(--primary-text-color); outline: none; }
+        input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 1px var(--primary-color); }
+        .status { font-size: 13px; color: var(--secondary-text-color); margin: 8px 2px 0; min-height: 18px; }
+        .status.err { color: var(--error-color, #db4437); }
+        .results { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; max-height: 420px; overflow: auto; }
+        .item { all: unset; box-sizing: border-box; cursor: pointer; display: block; width: 100%; padding: 10px 12px; border-radius: 10px;
+          border: 1px solid var(--divider-color, #ddd); background: var(--card-background-color, #fff); }
+        .item:hover, .item:focus-visible { border-color: var(--primary-color); background: var(--secondary-background-color, #f5f5f5); }
+        .item.selected { border-color: var(--primary-color); box-shadow: 0 0 0 1px var(--primary-color); }
+        .place { font-size: 12px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: var(--secondary-text-color); }
+        .line { display: flex; align-items: baseline; gap: 8px; margin: 2px 0 6px; color: var(--primary-text-color); }
+        .name { font-size: 15px; font-weight: 600; }
+        .dir { font-size: 14px; color: var(--secondary-text-color); }
+        .added { margin-left: auto; font-size: 12px; color: var(--success-color, #43a047); font-weight: 600; white-space: nowrap; }
+        .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+        .badge { font: 700 12px/1 Roboto, Arial, sans-serif; padding: 4px 6px; border-radius: 4px; min-width: 14px; text-align: center; }
+        .badge.dark { box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
+      </style>
+      <div class="search">
+        <div class="label">Megálló keresése</div>
+        <input type="search" autocomplete="off" placeholder="Kezdd el gépelni, pl. Deák Ferenc tér vagy Templom tér">
+        <div class="hint">Kattints egy találatra: ha még nincs felvéve, automatikusan hozzáadja a Budapesti Indulások integrációhoz.</div>
+        <div class="status"></div>
+        <div class="results"></div>
+      </div>
+      <ha-form></ha-form>`;
+    this._input = this.shadowRoot.querySelector("input");
+    this._status = this.shadowRoot.querySelector(".status");
+    this._results = this.shadowRoot.querySelector(".results");
+    this._form = this.shadowRoot.querySelector("ha-form");
+    const def = DotMatrixDepartureCard.formDefinition();
+    this._form.schema = def.schema;
+    this._form.computeLabel = def.computeLabel;
+    this._form.hass = this._hass;
+    this._form.data = this._config || {};
+    this._form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      this._update(ev.detail.value);
+    });
+    this._input.addEventListener("input", () => {
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => this._search(), 250);
+    });
+  }
+
+  _setStatus(text, err = false) {
+    this._status.textContent = text || "";
+    this._status.classList.toggle("err", !!err);
+  }
+
+  async _search() {
+    const q = this._input.value.trim();
+    const seq = ++this._seq;
+    if (q.length < 3) {
+      this._results.innerHTML = "";
+      this._setStatus(q.length ? "Írj be legalább 3 betűt…" : "");
+      return;
+    }
+    this._setStatus("Keresés…");
+    try {
+      const res = await this._hass.callWS({ type: "budapest_departures/search", query: q });
+      if (seq !== this._seq) return; // a newer search is running
+      this._render(res.stops || []);
+      this._setStatus(res.stops?.length ? `${res.stops.length} találat` : "Nincs ilyen megálló. Próbáld rövidebben vagy ékezettel.");
+    } catch (e) {
+      if (seq !== this._seq) return;
+      this._results.innerHTML = "";
+      this._setStatus(e?.code === "unknown_command"
+        ? "Ehhez telepítsd és állítsd be a Budapesti Indulások integrációt."
+        : e?.message || "Hiba a keresésnél.", true);
+    }
+  }
+
+  _render(stops) {
+    this._stops = stops;
+    this._results.innerHTML = stops.map((s, i) => {
+      const badges = (s.routes || []).map((r) => {
+        const dark = /^#(0{6}|1|2)/i.test(r.color);
+        return `<span class="badge${dark ? " dark" : ""}" style="background:${esc(r.color)};color:${esc(r.text_color)}">${esc(r.name)}</span>`;
+      }).join("");
+      const selected = s.entity_id && s.entity_id === this._config?.entity;
+      return `<button class="item${selected ? " selected" : ""}" data-i="${i}">
+        <div class="place">${esc(s.place || "")}</div>
+        <div class="line"><span class="name">${esc(s.name)}</span>${s.direction ? `<span class="dir">→ ${esc(s.direction)}</span>` : ""}${s.added ? `<span class="added">✓ felvéve</span>` : ""}</div>
+        <div class="badges">${badges}</div>
+      </button>`;
+    }).join("");
+    this._results.querySelectorAll(".item").forEach((el) =>
+      el.addEventListener("click", () => this._pick(this._stops[Number(el.dataset.i)]))
+    );
+  }
+
+  async _pick(stop) {
+    try {
+      let entity = stop.entity_id;
+      if (!stop.added || !entity) {
+        this._setStatus(`${stop.name} felvétele…`);
+        const res = await this._hass.callWS({ type: "budapest_departures/add_stop", stop_id: stop.id });
+        entity = res.entity_id;
+        stop.added = true;
+        stop.entity_id = entity;
+      }
+      this._update({ ...this._config, entity });
+      this._setStatus(`Kiválasztva: ${stop.place ? stop.place + " · " : ""}${stop.name}${stop.direction ? " → " + stop.direction : ""}`);
+      this._render(this._stops);
+    } catch (e) {
+      this._setStatus(e?.message || "Nem sikerült felvenni a megállót.", true);
+    }
+  }
+
+  _update(config) {
+    this._config = config;
+    if (this._form) this._form.data = config;
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+  }
+}
+
+customElements.define("dot-matrix-departure-card-editor", DotMatrixDepartureCardEditor);
+
 
 window.customCards = window.customCards || [];
 window.customCards.push({
