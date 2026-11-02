@@ -3,7 +3,7 @@
  * https://github.com/szbence7/dot-matrix-departure-card
  * MIT License (c) Szorgalmatos Bence
  */
-const CARD_VERSION = "0.1.0";
+const CARD_VERSION = "0.2.0";
 
 // 5x7 dot-matrix font: 35 bits per glyph, row by row
 const GLYPHS = {"0": "01110100011000110001100011000101110", "1": "00100011000010000100001000010001110", "2": "01110100010001000100010001000011111", "3": "01110100010000100110000011000101110", "4": "00010001100101010010111110001000010", "5": "11111100001111000001000011000101110", "6": "00110010001000011110100011000101110", "7": "11111000010001000100010000100001000", "8": "01110100011000101110100011000101110", "9": "01110100011000101111000010001001100", "A": "01110100011000111111100011000110001", "B": "11110100011000111110100011000111110", "C": "01110100011000010000100001000101110", "D": "11110100011000110001100011000111110", "E": "11111100001000011110100001000011111", "F": "11111100001000011110100001000010000", "G": "01110100011000010111100011000101110", "H": "10001100011000111111100011000110001", "I": "01110001000010000100001000010001110", "J": "00111000100001000010000101001001100", "K": "10001100101010011000101001001010001", "L": "10000100001000010000100001000011111", "M": "10001110111010110001100011000110001", "N": "10001110011010110011100011000110001", "O": "01110100011000110001100011000101110", "P": "11110100011000111110100001000010000", "Q": "01110100011000110001101011001001101", "R": "11110100011000111110101001001010001", "S": "01111100001000001110000010000111110", "T": "11111001000010000100001000010000100", "U": "10001100011000110001100011000101110", "V": "10001100011000110001010100101000100", "W": "10001100011000110101101011101110001", "X": "10001010100010000100001000101010001", "Y": "10001010100010000100001000010000100", "Z": "11111000010001000100010001000011111", " ": "00000000000000000000000000000000000", ":": "00000001000010000000001000010000000", "'": "00100001000000000000000000000000000", "Á": "00100011101000110001111111000110001", "É": "00100111111000011110100001000011111", "Í": "00100011100010000100001000010001110", "Ó": "00100011101000110001100011000101110", "Ö": "01010011101000110001100011000101110", "Ő": "10001011101000110001100011000101110", "Ú": "00100100011000110001100011000101110", "Ü": "01010100011000110001100011000101110", "Ű": "01001100100000010001100011000101110", ",": "00000000000000000000001100001000100", ".": "00000000000000000000000000011000110", "-": "00000000000000011111000000000000000", "/": "00001000100001000100010000100010000", "!": "00100001000010000100001000000000100", "?": "01110100010000100010001000000000100", "(": "00010001000100001000010000010000010", ")": "01000001000001000010000100010001000", "+": "00000001000010011111001000010000000"};
@@ -20,7 +20,7 @@ const COLORS = [
 const DEFAULTS = {
   rows: 6,
   color: "#ff8800",
-  columns: 140,
+  columns: "auto",
   scroll_speed: 23,
   show_title: true,
   show_alerts: true,
@@ -30,6 +30,11 @@ const DEFAULTS = {
 };
 
 const MARQUEE_GAP = "   ";
+// Responsive sizing: dot pitch in CSS px
+const MIN_PITCH = 2;
+const MAX_PITCH = 4.5;
+const IDEAL_COLUMNS = 140;
+const MIN_COLUMNS = 75; // route (30) + time (24) + a few letters of the destination
 
 /** Text -> 7 rows of 0/1 columns, 1 blank column between glyphs. */
 function textToMatrix(text) {
@@ -76,7 +81,7 @@ class DotMatrixDepartureCard extends HTMLElement {
           schema: [
             { name: "rows", selector: { number: { min: 1, max: 12, mode: "box" } } },
             { name: "color", selector: { select: { options: COLORS, custom_value: true, mode: "dropdown" } } },
-            { name: "columns", selector: { number: { min: 80, max: 260, step: 10, mode: "box" } } },
+            { name: "columns", selector: { number: { min: 80, max: 300, step: 10, mode: "box" } } },
             { name: "scroll_speed", selector: { number: { min: 5, max: 60, mode: "box" } } },
           ],
         },
@@ -97,7 +102,7 @@ class DotMatrixDepartureCard extends HTMLElement {
           title: "Cím (alapból a megálló neve)",
           rows: "Sorok száma",
           color: "LED szín",
-          columns: "Pötty / sor (kisebb = nagyobb betű)",
+          columns: "Pötty / sor (üresen: automatikus)",
           scroll_speed: "Görgetés sebessége (pötty/mp)",
           show_title: "Cím mutatása",
           show_alerts: "Forgalmi zavarok mutatása",
@@ -127,7 +132,7 @@ class DotMatrixDepartureCard extends HTMLElement {
   }
 
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: "auto" };
+    return { columns: 12, min_columns: 4, rows: "auto" };
   }
 
   connectedCallback() {
@@ -146,10 +151,11 @@ class DotMatrixDepartureCard extends HTMLElement {
     const c = this._config;
     this.shadowRoot.innerHTML = `
       <style>
-        ha-card { overflow: hidden; }
-        .wrap { padding: 14px; }
-        .title { color: var(--primary-text-color); font-size: 1.2em; font-weight: 500; margin: 0 0 10px 2px; display: ${c.show_title ? "block" : "none"}; }
-        .board { ${c.background ? "background: #000; border: 1px solid #333; box-shadow: inset 0 0 12px rgba(0,0,0,.8);" : ""} border-radius: 6px; padding: 10px; }
+        :host { display: block; height: 100%; }
+        ha-card { display: block; overflow: hidden; height: 100%; box-sizing: border-box; }
+        .wrap { padding: 14px; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; }
+        .title { color: var(--primary-text-color); font-size: 1.2em; font-weight: 500; margin: 0 0 10px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; display: ${c.show_title ? "block" : "none"}; }
+        .board { flex: ${typeof c.grid_options?.rows === "number" ? "1 1 auto" : "none"}; min-height: 0; display: flex; align-items: center; ${c.background ? "background: #000; border: 1px solid #333; box-shadow: inset 0 0 12px rgba(0,0,0,.8);" : ""} border-radius: 6px; padding: 10px; }
         canvas { display: block; width: 100%; }
       </style>
       <ha-card>
@@ -173,8 +179,14 @@ class DotMatrixDepartureCard extends HTMLElement {
     this._departures = Array.isArray(a.departures) ? a.departures : [];
     this._alert = this._config.show_alerts ? a.alert || "" : "";
     this._unavailable = !s || s.state === "unavailable";
-    if (this._titleEl) this._titleEl.textContent = this._config.title || a.stop_name || a.friendly_name || "";
+    const stop = a.stop_name ? `${a.stop_name}${a.direction ? ` → ${a.direction}` : ""}` : "";
+    if (this._titleEl) this._titleEl.textContent = this._config.title || stop || a.friendly_name || "";
     this._resize();
+  }
+
+  /** Height of the board in dot units for a given number of rows. */
+  _heightDots(rows) {
+    return (rows + (this._alert ? 1 : 0)) * 10 - 3 + (this._alert ? 2 : 0);
   }
 
   _resize() {
@@ -182,15 +194,45 @@ class DotMatrixDepartureCard extends HTMLElement {
     const width = this._board.clientWidth - 20;
     if (width <= 0) return;
     const c = this._config;
-    this._pitch = width / c.columns;
-    this._cols = c.columns;
-    const lines = c.rows + (this._alert ? 1 : 0);
-    // each line: 7 dots + 3 dots spacing (last line without spacing)
-    const heightDots = lines * 10 - 3 + (this._alert ? 2 : 0);
     const dpr = window.devicePixelRatio || 1;
+    const snap = (v) => Math.max(1 / dpr, Math.round(v * dpr) / dpr);
+
+    // 1) pitch from the width
+    let pitch;
+    if (Number(c.columns) > 0) {
+      pitch = width / Number(c.columns);
+    } else {
+      pitch = Math.min(MAX_PITCH, Math.max(MIN_PITCH, width / IDEAL_COLUMNS));
+      if (width / pitch < MIN_COLUMNS) pitch = width / MIN_COLUMNS; // very narrow card: smaller dots
+    }
+
+    // 2) fixed card height (sections view, height set by the user): fit as many rows as possible
+    let rows = c.rows;
+    const fixedHeight = typeof c.grid_options?.rows === "number";
+    pitch = snap(pitch);
+    if (fixedHeight) {
+      const card = this.shadowRoot.querySelector("ha-card");
+      const titleH = c.show_title ? this._titleEl.getBoundingClientRect().height + 10 : 0;
+      const avail = card.clientHeight - 28 - titleH - 22; // wrap padding, title, board padding + border
+      if (avail > 0) {
+        const extra = this._alert ? 12 : 0;
+        const fit = (pt) => Math.floor((avail / pt + 3 - extra) / 10);
+        const wanted = Math.max(c.rows, this._departures.length || 1);
+        rows = Math.max(1, Math.min(wanted, fit(pitch)));
+        // still too tall at this size: shrink the dots so one row fits
+        if (fit(pitch) < 1) pitch = Math.max(1 / dpr, Math.floor((avail / this._heightDots(1)) * dpr) / dpr);
+      }
+    }
+
+    this._pitch = pitch;
+    this._rowsShown = rows;
+    this._cols = Math.floor(width / pitch + 1e-6);
+    if (this._cols < 1) this._cols = 1;
+    this._offsetX = Math.floor(((width - this._cols * pitch) / 2) * dpr) / dpr;
+    const height = this._heightDots(rows) * pitch;
     this._canvas.width = Math.round(width * dpr);
-    this._canvas.height = Math.round(heightDots * this._pitch * dpr);
-    this._canvas.style.height = `${heightDots * this._pitch}px`;
+    this._canvas.height = Math.round(height * dpr);
+    this._canvas.style.height = `${height}px`;
     this._ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this._width = width;
     this._draw(performance.now());
@@ -240,15 +282,19 @@ class DotMatrixDepartureCard extends HTMLElement {
     const deps = this._departures
       .map((d) => ({ ...d, min: Math.max(0, Math.round(((d.departure || 0) * 1000 - now) / 60000)) }))
       .filter((d) => d.departure * 1000 - now > -60000)
-      .slice(0, c.rows);
+      .slice(0, this._rowsShown);
     if (!deps.length) return [{ cells: [{ text: c.empty_text, flex: true }] }];
+    // column widths sized to the longest value on the board, so narrow cards keep room for the destination
+    const routeW = Math.max(2, ...deps.map((d) => String(d.route).length));
+    const timeW = Math.max(2, ...deps.map((d) => `${d.min}'`.length));
+    const gap = this._cols < 110 ? 4 : 6;
     return deps.map((d) => ({
       blink: d.min <= 0,
       routeColor: c.route_colors && !d.night ? d.color : null,
       cells: [
-        { text: `${String(d.route).padEnd(4, " ")} `, fixed: true },
+        { text: String(d.route).padEnd(routeW, " "), fixed: true, before: 0, after: gap },
         { text: d.headsign || "", flex: true },
-        { text: ` ${`${d.min}'`.padStart(3, " ")}`, fixed: true, lead: 1 },
+        { text: `${d.min}'`.padStart(timeW, " "), fixed: true, before: gap, after: 0 },
       ],
     }));
   }
@@ -258,7 +304,9 @@ class DotMatrixDepartureCard extends HTMLElement {
     if (!ctx || !this._width) return;
     const c = this._config;
     const p = this._pitch;
-    const dot = Math.max(1, p * 0.78);
+    const ox = this._offsetX || 0;
+    const dpr = window.devicePixelRatio || 1;
+    const dot = Math.max(1 / dpr, Math.round(p * 0.78 * dpr) / dpr);
     const r = Math.min(dot / 2, p * 0.2);
     const now = Date.now();
     const blinkOff = Math.floor(t / 500) % 2 === 1;
@@ -268,8 +316,9 @@ class DotMatrixDepartureCard extends HTMLElement {
     const lit = new Map(); // color -> Path2D
     const unlit = new Path2D();
     const addDot = (path, x, y) => {
-      if (path.roundRect) path.roundRect(x * p, y * p, dot, dot, r);
-      else path.rect(x * p, y * p, dot, dot);
+      const px = ox + x * p;
+      if (path.roundRect) path.roundRect(px, y * p, dot, dot, r);
+      else path.rect(px, y * p, dot, dot);
     };
     const paint = (matrix, x0, y0, color, hidden) => {
       let path = lit.get(color);
@@ -285,7 +334,7 @@ class DotMatrixDepartureCard extends HTMLElement {
     lines.forEach((line, li) => {
       const y0 = li * 10;
       const hidden = line.blink && blinkOff;
-      const fixed = line.cells.filter((cell) => cell.fixed).map((cell) => pad(textToMatrix(cell.text), cell.lead || 0, cell.lead ? 0 : 1));
+      const fixed = line.cells.filter((cell) => cell.fixed).map((cell) => pad(textToMatrix(cell.text), cell.before || 0, cell.after || 0));
       const fixedWidth = fixed.reduce((s, m) => s + widthOf(m), 0);
       let x = 0;
       let fi = 0;
@@ -305,14 +354,15 @@ class DotMatrixDepartureCard extends HTMLElement {
     });
 
     // empty rows keep the board size
-    for (let li = lines.length; li < c.rows; li++) {
+    for (let li = lines.length; li < c.rows; li++) paint(textToMatrix(""), 0, li * 10, c.color, false);
+    for (let li = lines.length; li < this._rowsShown; li++) {
       for (let y = 0; y < 7; y++) for (let x = 0; x < this._cols; x++) addDot(unlit, x, li * 10 + y);
     }
 
     if (this._alert) {
-      const y0 = c.rows * 10 + 2;
+      const y0 = this._rowsShown * 10 + 2;
       ctx.fillStyle = "#222";
-      ctx.fillRect(0, (y0 - 2) * p, this._width, Math.max(1, p * 0.3));
+      ctx.fillRect(ox, (y0 - 2) * p, this._cols * p, Math.max(1, p * 0.3));
       paint(this._window(this._alert, this._cols, 99), 0, y0, c.color, false);
     }
 
