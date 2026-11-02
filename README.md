@@ -1,44 +1,96 @@
-# Dotmatrix Indulási Kijelző – Home Assistant kártya
+# 🟧 Dotmatrix Indulási Kijelző – Home Assistant kártya
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
+[![Verzió](https://img.shields.io/github/v/release/szbence7/dot-matrix-departure-card?label=verzi%C3%B3)](https://github.com/szbence7/dot-matrix-departure-card/releases)
 
-Olyan kártya, mint egy igazi FUTÁR utastájékoztató kijelző: saját rajzolású 5×7-es pöttyös betűkészlet teljes magyar ékezetkészlettel, görgő hosszú végállomásnevek, villogó „most indul” sor és görgő forgalmi zavar sáv.
+Olyan kártya, mint egy igazi FUTÁR utastájékoztató kijelző a megállóban.
 
-![Előnézet](images/preview.png)
+![Dashboard](images/dashboard.png)
+
+- 🔤 Saját rajzolású 5×7-es pöttyös betűkészlet, **teljes magyar ékezetkészlettel** (Ő, Ű is)
+- ↔️ A hosszú végállomásnevek **görögnek**, mint a valódi kijelzőn
+- 💡 A **most induló** járat sora villog
+- ⚠️ Alul görgő **forgalmi zavar** sáv
+- 🎨 Választható LED szín, és opcionálisan a járatszám a **járat saját színében** (M2 piros, villamos sárga…)
+- 📐 **Bármilyen méretben szép**: telefonon, tableten, keskeny és széles kártyán is (lásd lent)
 
 Az adatokat a **[Budapesti Indulások](https://github.com/szbence7/ha-budapest-departures)** integráció adja (BKK FUTÁR).
 
+---
+
 ## Telepítés
 
-1. Telepítsd a [Budapesti Indulások](https://github.com/szbence7/ha-budapest-departures) integrációt, és adj hozzá egy megállót
-2. HACS → jobb felső ⋮ → **Egyéni tárolók (Custom repositories)** → `https://github.com/szbence7/dot-matrix-departure-card`, típus: **Dashboard**
-3. Telepítsd a **Dotmatrix Indulási Kijelző** kártyát, majd frissítsd a böngészőt
-4. Dashboard → Szerkesztés → Kártya hozzáadása → *Dotmatrix Indulási Kijelző*
+1. Először telepítsd és állítsd be a **[Budapesti Indulások](https://github.com/szbence7/ha-budapest-departures)** integrációt (ott le van írva az ingyenes API kulcs igénylése is)
+2. **HACS** → jobb felső **⋮** → **Egyéni tárolók** (Custom repositories)
+3. Tároló: `https://github.com/szbence7/dot-matrix-departure-card`, típus: **Dashboard** → **Hozzáadás**
+4. Keresd meg a **Dotmatrix Indulási Kijelző**-t → **Letöltés**
+5. **Frissítsd a böngészőt** (telefonon az appban: húzd le az oldalt)
 
-Minden beállítás elérhető a vizuális szerkesztőben.
+## Kártya hozzáadása
+
+1. Dashboard → jobb felül **ceruza** (szerkesztés) → **+ Kártya hozzáadása**
+2. Keresd: **Dotmatrix Indulási Kijelző**
+3. Válaszd ki a megálló szenzorát – minden más opcionális, és a **vizuális szerkesztőben** állítható
+
+---
+
+## Méretek
+
+A kártya magától igazodik a rendelkezésre álló helyhez: a pöttyök mérete a szélességhez igazodik, a járatszám- és perc-oszlop pont olyan széles, amilyen kell, a maradék hely a végállomásé.
+
+![Különböző szélességek](images/meretek.png)
+
+Ha a *Sections* nézetben **fix magasságot** állítasz a kártyának, annyi sort mutat, amennyi kényelmesen elfér:
+
+![Fix magasság](images/fix-magassag.png)
+
+Telefonon:
+
+<img src="images/mobil.png" width="320" alt="Telefonon">
+
+---
 
 ## Beállítások
 
 | Név | Alapérték | Leírás |
 |---|---|---|
-| `entity` | kötelező | A Budapesti Indulások integráció szenzora |
-| `title` | a megálló neve | A kártya címe |
+| `entity` | **kötelező** | A Budapesti Indulások integráció szenzora |
+| `title` | megálló neve + irány | A kártya címe |
 | `show_title` | `true` | Cím mutatása |
 | `rows` | `6` | Indulási sorok száma |
-| `color` | `#ff8800` | LED szín (bármilyen CSS szín) |
-| `columns` | `140` | Pötty / sor. Kisebb szám = nagyobb betűk |
-| `scroll_speed` | `23` | Görgetés sebessége (pötty / mp) |
+| `color` | `#ff8800` | LED szín (borostyán, sárga, zöld, fehér, piros, vagy bármilyen CSS szín) |
+| `route_colors` | `false` | Járatszám a járat hivatalos színében |
 | `show_alerts` | `true` | Forgalmi zavar sáv alul |
-| `route_colors` | `false` | Járatszám a járat hivatalos színében (M2 piros, villamos sárga…) |
-| `background` | `true` | Fekete kijelző háttér |
+| `background` | `true` | Fekete kijelző háttér (kikapcsolva átlátszó) |
+| `scroll_speed` | `23` | Görgetés sebessége (pötty / másodperc) |
+| `columns` | automatikus | Fix pötty/sor szám. Csak akkor add meg, ha mindenhol pontosan ugyanakkora betűket szeretnél |
 | `empty_text` | `NINCS JÁRAT` | Ez látszik, ha nincs indulás |
 
+### Példák
+
 ```yaml
+# Egyszerű
 type: custom:dot-matrix-departure-card
-entity: sensor.templom_ter_kovetkezo_indulas
+entity: sensor.templom_ter_ny_kovetkezo_indulas
+```
+
+```yaml
+# Metró, járatszínekkel, 4 sor
+type: custom:dot-matrix-departure-card
+entity: sensor.deli_palyaudvar_m_k_kovetkezo_indulas
 rows: 4
 route_colors: true
 ```
+
+```yaml
+# Zöld LED, saját címmel
+type: custom:dot-matrix-departure-card
+entity: sensor.templom_ter_ny_kovetkezo_indulas
+title: Buszom haza
+color: "#3dff6e"
+```
+
+---
 
 ## Saját adatforrással
 
