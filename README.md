@@ -32,7 +32,12 @@ Az adatokat a **[Budapesti Indulások](https://github.com/szbence7/ha-budapest-d
 
 1. Dashboard → jobb felül **ceruza** (szerkesztés) → **+ Kártya hozzáadása**
 2. Keresd: **Dotmatrix Indulási Kijelző**
-3. Válaszd ki a megálló szenzorát – minden más opcionális, és a **vizuális szerkesztőben** állítható
+3. A szerkesztő tetején **kezdd el gépelni a megálló nevét**: már gépelés közben jönnek a találatok a **településsel vagy kerülettel**, a **haladási iránnyal** és a járatok **színes jelvényeivel**
+4. Kattints a megfelelőre. Ha még nincs felvéve, **automatikusan hozzáadja** a Budapesti Indulások integrációhoz, és a kártya már mutatja is az indulásokat
+
+![Élő keresés a szerkesztőben](images/kartya-kereso.png)
+
+Minden más (sorok száma, szín, cím…) ugyanitt, a kereső alatt állítható.
 
 ---
 
